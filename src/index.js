@@ -27,51 +27,43 @@ function draw(tFrame) {
         drawBonus(context)
 }
 
-function update(tick) {
+function platformCollision()
+{
+ball = gameState.ball;
+player = gameState.player;
 
-    const vx = (gameState.pointer.x - gameState.player.x) / 10
-    gameState.player.x += vx
-
-    const ball = gameState.ball;
-    const player = gameState.player
-    if(gameState.isLose)
-        stopGame(gameState.stopCycle)
-
-     if(ball.y+ball.radius >= canvas.height)
-     {
-        clearInterval(gameState.timerScore)
-        clearInterval(gameState.timerSpeed)
-        clearInterval(gameState.timerBonus)
-        gameState.isLose = true;
-     }
-
-    if(ball.x+ball.radius >= canvas.width || ball.x-ball.radius <= 0)
+ if(ball.x+ball.radius >= canvas.width || ball.x-ball.radius <= 0)
         ball.vx *= -1
     if(ball.y+ball.radius >= canvas.height || ball.y-ball.radius <= 0)
         ball.vy *= -1
     
+    // ball-platform vertical collision
     if( (ball.x-ball.radius+ball.vy >= player.x-player.width/2 &&
         ball.x+ball.radius <= player.x+player.width/2) &&
-        (ball.y+ball.radius >= player.y-player.height/2)
-            )
+        (ball.y+ball.radius >= player.y-player.height/2) &&
+        ball.vy > 0)
             {
                 ball.vy *= -1
             }
 
+    // ball-platform horizontal collision
     else if(ball.y+ball.radius >= player.y-player.height/2 &&
     (
         (ball.x+ball.radius >= player.x-player.width/2 && 
             ball.x+ball.radius <= player.x+player.width/2) ||
         (ball.x-ball.radius >= player.x-player.width/2 && 
             ball.x-ball.radius <= player.x+player.width/2) 
-    ))
+    ) && Math.sign(ball.vx) === Math.sign(player.vx))
     {
         ball.vx *= -1
     }
         
-        ball.x += ball.vx
-        ball.y += ball.vy
+    ball.x += ball.vx
+    ball.y += ball.vy
+}
 
+function bonusCollision()
+{
     const bonus = gameState.bonus;
 
     if(gameState.bonus.isActive)
@@ -86,9 +78,31 @@ function update(tick) {
             {
                 bonus.isActive = false;
                 gameState.score += 15
+                player.width+=15
             }
         gameState.bonus.left += gameState.bonus.vx
         gameState.bonus.top += 5
+    }
+}
+
+function update(tick) {
+
+    if(gameState.isLose)
+        stopGame(gameState.stopCycle)
+    const vx = (gameState.pointer.x - gameState.player.x) / 10
+    gameState.player.x += vx
+
+    const ball = gameState.ball;
+    
+    platformCollision();
+    bonusCollision();
+    
+    if(ball.y+ball.radius >= canvas.height)
+    {
+       clearInterval(gameState.timerScore)
+       clearInterval(gameState.timerSpeed)
+       clearInterval(gameState.timerBonus)
+       gameState.isLose = true;
     }
 }
 
@@ -184,6 +198,7 @@ function setup() {
     gameState.lastTick = performance.now();
     gameState.lastRender = gameState.lastTick;
     gameState.tickLength = 15; //ms
+    canvas.addEventListener('click', onRestart, false)
 
     const platform = {
         width: 400,
@@ -204,8 +219,8 @@ function setup() {
         x: canvas.width / 2,
         y: 26,
         radius: 25,
-        vx: 5,
-        vy: 5
+        vx: (Math.random() < 0.5 ? -1 : 1) * Math.random() * 10,
+        vy: 7
     }
     gameState.bonus = {
         top: 0,
@@ -222,7 +237,17 @@ function setup() {
     gameState.isLose = false
     gameState.score = 0
 
-    gameState.timerScore = setInterval(function(){gameState.score++}, 1000);
+    gameState.timerScore = setInterval(function()
+    {
+         if(gameState.player.width > gameState.ball.radius*2)
+             gameState.player.width-=1
+    }, 
+    350);
+    gameState.timerScore = setInterval(function()
+    {
+        gameState.score++;
+    }, 
+    1000);
     gameState.timerSpeed = setInterval(function()
     {
         if(gameState.player.width > 200)
@@ -233,12 +258,22 @@ function setup() {
     30000);
     gameState.timerBonus = setInterval(function()
     {   
-        gameState.player.width+=15
         gameState.bonus.isActive = true;
         generateBonusParams()
     }, 
     15000);
 }
 
-setup();
-run();
+function onRestart(e)
+{
+    if(gameState.isLose)
+        startGame()
+}
+
+function startGame()
+{
+    setup();
+    run();
+}
+
+startGame()
