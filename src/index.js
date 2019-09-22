@@ -2,10 +2,16 @@ const canvas = document.getElementById("cnvs");
 
 const gameState = {};
 
-function onMouseMove(e) {
-    gameState.pointer.x = e.pageX;
-    gameState.pointer.y = e.pageY
-}
+const PI2 = 6.28
+const Grey = "#888888", Yellow = "#FFFF00", Red = "#FF0000";
+const Circle = 'circle', Triangle = 'triangle', Hexagon = 'hexagon'
+const circleSize = 20, triangleSize = 30, hexagonSize = 30;
+const maxSizeOfObject = 80;
+const startCount = 100;
+
+// предварительная проверка столкновений по описанным сферам
+// выводить FPS
+// сетка? квадродерево?
 
 function queueUpdates(numTicks) {
     for (let i = 0; i < numTicks; i++) {
@@ -16,93 +22,59 @@ function queueUpdates(numTicks) {
 
 function draw(tFrame) {
     const context = canvas.getContext('2d');
-
-    // clear canvas
     context.clearRect(0, 0, canvas.width, canvas.height);
-
-    drawPlatform(context)
-    drawBall(context)
+    gameState.figures.forEach(x => x.draw(context));
     drawTextInfo(context)
-    if(gameState.bonus.isActive)
-        drawBonus(context)
-}
-
-function platformCollision()
-{
-ball = gameState.ball;
-player = gameState.player;
-
- if(ball.x+ball.radius >= canvas.width || ball.x-ball.radius <= 0)
-        ball.vx *= -1
-    if(ball.y+ball.radius >= canvas.height || ball.y-ball.radius <= 0)
-        ball.vy *= -1
-    
-    // ball-platform vertical collision
-    if( (ball.x-ball.radius+ball.vy >= player.x-player.width/2 &&
-        ball.x+ball.radius <= player.x+player.width/2) &&
-        (ball.y+ball.radius >= player.y-player.height/2) &&
-        ball.vy > 0)
-            {
-                ball.vy *= -1
-            }
-
-    // ball-platform horizontal collision
-    else if(ball.y+ball.radius >= player.y-player.height/2 &&
-    (
-        (ball.x+ball.radius >= player.x-player.width/2 && 
-            ball.x+ball.radius <= player.x+player.width/2) ||
-        (ball.x-ball.radius >= player.x-player.width/2 && 
-            ball.x-ball.radius <= player.x+player.width/2) 
-    ) && Math.sign(ball.vx) === Math.sign(player.vx))
-    {
-        ball.vx *= -1
-    }
-        
-    ball.x += ball.vx
-    ball.y += ball.vy
-}
-
-function bonusCollision()
-{
-    const bonus = gameState.bonus;
-
-    if(gameState.bonus.isActive)
-    {
-        if(bonus.top + bonus.height >= player.y-player.height/2 &&
-            (
-                (bonus.left+bonus.width >= player.x-player.width/2 && 
-                    bonus.left+bonus.width <= player.x+player.width/2) ||
-                (bonus.left >= player.x-player.width/2 && 
-                    bonus.left <= player.x+player.width/2) 
-            ))
-            {
-                bonus.isActive = false;
-                gameState.score += 15
-                player.width+=15
-            }
-        gameState.bonus.left += gameState.bonus.vx
-        gameState.bonus.top += 5
-    }
 }
 
 function update(tick) {
-
-    if(gameState.isLose)
+    if(gameState.count === 0)
         stopGame(gameState.stopCycle)
-    const vx = (gameState.pointer.x - gameState.player.x) / 10
-    gameState.player.x += vx
 
-    const ball = gameState.ball;
-    
-    platformCollision();
-    bonusCollision();
-    
-    if(ball.y+ball.radius >= canvas.height)
+    gameState.figures.forEach(f => 
+        {
+            f.dx = f.x + f.vx;
+            f.dy = f.y + f.vy;
+
+            // wall collision
+            if(f.x+f.right >= canvas.width || f.x+f.left <= 0)
+                f.vx *= -1;
+            if(f.y+f.top >= canvas.height || f.y+f.bottom <= 0)
+                f.vy *= -1;
+            f.x += f.vx;
+            f.y += f.vy;
+
+            if(f.dx != f.x || f.dy != f.y)
+                f.state++;
+        })
+    changeColor();
+    clear();
+}
+
+function changeColor()
+{
+    gameState.figures.forEach(f => 
     {
-       clearInterval(gameState.timerScore)
-       clearInterval(gameState.timerSpeed)
-       clearInterval(gameState.timerBonus)
-       gameState.isLose = true;
+        switch(f.state){
+            case 1:
+                f.color = Yellow;
+                break;
+            case 2:
+                f.color = Red;
+                break;
+        }
+    })
+}
+
+function clear()
+{
+    let i = 0;
+    while(i < gameState.figures.length)
+    {
+        if(gameState.figures[i].state > 2)
+            gameState.figures.splice(i, 1);
+        else
+            i++;
     }
 }
 
@@ -125,149 +97,138 @@ function stopGame(handle) {
     window.cancelAnimationFrame(handle);
 }
 
-function drawPlatform(context) {
-    const {x, y, width, height} = gameState.player;
-    context.beginPath();
-    context.rect(x - width / 2, y - height / 2, width, height);
-    context.fillStyle = "#FF0000";
-    context.fill();
-    context.closePath();
-}
-
-function drawBall(context) {
-    const {x, y, radius} = gameState.ball;
-    context.beginPath();
-    context.arc(x, y, radius, 0, 2 * Math.PI);
-    context.fillStyle = "#0000FF";
-    context.fill();
-    context.closePath();
-}
-
-function drawBonus(context)
-{
-    const {left, top, width, height} = gameState.bonus
-    const coordsArray = [
-        [left+width/3, top],
-        [left+width*2/3, top],
-        [left+width*2/3, top+height/3],
-        [left+width, top+height/3],
-        [left+width, top+height*2/3],
-        [left+width*2/3, top+height*2/3],
-        [left+width*2/3, top+height],
-        [left+width/3, top+height],
-        [left+width/3, top+height*2/3],
-        [left, top+height*2/3],
-        [left, top+height/3],
-        [left+width/3, top+height/3],
-    ]
-    context.beginPath();
-    context.moveTo(left+width/3, top)
-    coordsArray.forEach(point => {
-        context.lineTo(point[0], point[1])
-    });
-    context.fillStyle = "#00F00F";
-    context.fill();
-    context.closePath();
-}
-
-function generateBonusParams()
-{
-    gameState.bonus.left = Math.random() * (canvas.width - gameState.bonus.width)
-    gameState.bonus.top = Math.random() * (canvas.height/2 - gameState.bonus.height)
-}
-
 function drawTextInfo(context)
 {
-    if(gameState.isLose)
-    {
-        context.fillStyle = "#FF0000"
-        context.font = "48px serif"
-        context.fillText("You lose", canvas.width*5/12, canvas.height/2)
-    }
-    context.fillStyle = "#FF00FF"
+    context.fillStyle = "#FF800F"
     context.font = "48px serif"
-    context.fillText("SCORE: " + gameState.score, canvas.width/10, canvas.height/10)
+    context.fillText("COUNT: " 
+    + gameState.figures.length +"/" + gameState.startCount, 
+    canvas.width/20, canvas.height*9/10)
 }
 
 function setup() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 
-    canvas.addEventListener('mousemove', onMouseMove, false);
-
     gameState.lastTick = performance.now();
     gameState.lastRender = gameState.lastTick;
     gameState.tickLength = 15; //ms
     canvas.addEventListener('click', onRestart, false)
 
-    const platform = {
-        width: 400,
-        height: 50,
-    };
-
-    gameState.player = {
-        x: 100,
-        y: canvas.height - platform.height / 2,
-        width: platform.width,
-        height: platform.height
-    };
-    gameState.pointer = {
-        x: 0,
-        y: 0,
-    };
-    gameState.ball = {
-        x: canvas.width / 2,
-        y: 26,
-        radius: 25,
-        vx: (Math.random() < 0.5 ? -1 : 1) * Math.random() * 10,
-        vy: 7
-    }
-    gameState.bonus = {
-        top: 0,
-        left: 0,
-        width: 30,
-        height: 30,
-        vx: 0,
-        vy: 0,
-        angle:0,
-        t: 0,
-        isActive: false
-    }
-
     gameState.isLose = false
-    gameState.score = 0
+    gameState.startCount = startCount
+    generateFigures(gameState.startCount)
+}
 
-    gameState.timerScore = setInterval(function()
+class Figure{
+    constructor(type, x, y, size, vx, vy, draw)
     {
-         if(gameState.player.width > gameState.ball.radius*2)
-             gameState.player.width-=1
-    }, 
-    350);
-    gameState.timerScore = setInterval(function()
+        this.type = type;
+        this.x = x;
+        this.y = y;
+        this.size = size;
+        this.vx = vx;
+        this.vy = vy;
+        this.color = Grey;
+        this.draw = draw;
+        this.state = 0;
+        this.dx = x;
+        this.dy = y;
+    }
+    draw(context) {
+    }
+}
+
+function generateFigures(count)
+{
+    const figures = [];
+    let variant = 0;
+    let newFigure = null;
+    let vx = 0, vy = 0, x = 0;
+    let y = maxSizeOfObject;
+    for(let i = 0; i < count; i++)
     {
-        gameState.score++;
-    }, 
-    1000);
-    gameState.timerSpeed = setInterval(function()
-    {
-        if(gameState.player.width > 200)
-            gameState.player.width-=10
-        gameState.ball.vx *= 1.1
-        gameState.ball.vy *= 1.1
-    }, 
-    30000);
-    gameState.timerBonus = setInterval(function()
+        x += maxSizeOfObject;
+        
+        if(x > canvas.width - maxSizeOfObject)
+        {
+            x = maxSizeOfObject;
+            y += maxSizeOfObject;
+        }
+        variant = Math.round(Math.random()*2 + 1);
+        vx = (Math.random() < 0.5 ? -1 : 1) * Math.random() * 1;
+        vy = (Math.random() < 0.5 ? -1 : 1) * Math.random() * 1;
+        switch(variant)
+        {
+            case 1:
+                newFigure = new Figure(Circle, x, y, circleSize, vx, vy, drawCircle);
+                newFigure.left = -circleSize;
+                newFigure.right = circleSize;
+                newFigure.top = circleSize;
+                newFigure.bottom = -circleSize;
+                break;
+            case 2:
+                newFigure = new Figure(Triangle, x, y, triangleSize, vx, vy, drawPolygon);
+                generatePoints(newFigure, 3, triangleSize, -Math.PI/2);
+                break;
+            case 3:
+                newFigure = new Figure(Hexagon, x, y, hexagonSize, vx, vy, drawPolygon);
+                generatePoints(newFigure, 6, hexagonSize);
+                break;
+        }
+        figures.push(newFigure)
+    }
+    gameState.figures = figures;
+}
+
+function drawCircle(context) 
+{
+    context.beginPath();
+    context.arc(this.x, this.y, this.size, 0, PI2);
+    context.fillStyle = this.color;
+    context.fill();
+    context.closePath();
+}
+
+function drawPolygon(context) 
+{
+    context.beginPath();
+    context.moveTo(this.x, this.y);
+    this.points.forEach(p => {
+        context.lineTo(this.x+p[0], this.y+p[1])
+    })
+    context.fillStyle = this.color;
+    context.fill();
+    context.closePath();
+}
+
+function generatePoints(figure, number, size, startAngle=0) 
+{
+    figure.points = [];
+    figure.left = 0;
+    figure.right = 0;
+    figure.top = 0;
+    figure.bottom = 0;
+    for(let angle = startAngle; angle <= PI2+startAngle; angle+= PI2/number)
     {   
-        gameState.bonus.isActive = true;
-        generateBonusParams()
-    }, 
-    15000);
+        let px = Math.cos(angle)*size;
+        let py = Math.sin(angle)*size;
+        if(figure.left > px)
+            figure.left = px;
+        else if (figure.right < px)
+            figure.right = px
+
+        if(figure.top < py)
+            figure.top = py;
+        else if (figure.bottom > py)
+            figure.bottom = py
+        figure.points.push([px, py])
+    }
 }
 
 function onRestart(e)
 {
-    if(gameState.isLose)
-        startGame()
+    startGame()
 }
 
 function startGame()
