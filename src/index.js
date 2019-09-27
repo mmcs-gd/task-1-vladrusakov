@@ -29,8 +29,8 @@ function draw(tFrame) {
 
 function platformCollision()
 {
-ball = gameState.ball;
-player = gameState.player;
+const ball = gameState.ball;
+const player = gameState.player;
 
  if(ball.x+ball.radius >= canvas.width || ball.x-ball.radius <= 0)
         ball.vx *= -1
