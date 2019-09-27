@@ -42,7 +42,7 @@ function isEdgesIntersect(ax, ay, bx, by, cx, cy, dx, dy)
 
 function isCollision(fig1, fig2)
 {
-    x1 = fig1.x; y1 = fig1.y; p1 = fig1.points;
+    const x1 = fig1.x, y1 = fig1.y, p1 = fig1.points,
     x2 = fig2.x; y2 = fig2.y; p2 = fig2.points;
 
     for(let i = 0; i < p1.length-1; i++)
@@ -103,18 +103,6 @@ function changeColor()
                 break;
         }
     });
-}
-
-function clear()
-{
-    let i = 0;
-    while(i < gameState.figures.length)
-    {
-        if(gameState.figures[i].state > 2)
-            gameState.figures.splice(i, 1);
-        else
-            i++;
-    }
 }
 
 function run(tFrame) {
@@ -262,7 +250,7 @@ function generatePoints(figure, number, size, startAngle=0)
     }
 }
 
-function onRestart(e){startGame()}
+function onRestart(e) { startGame() }
 
 function startGame()
 {
