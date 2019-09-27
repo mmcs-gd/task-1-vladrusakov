@@ -2,16 +2,22 @@ const canvas = document.getElementById("cnvs");
 
 const gameState = {};
 
-const PI2 = 6.28
-const Grey = "#888888", Yellow = "#FFFF00", Red = "#FF0000";
-const Circle = 'circle', Triangle = 'triangle', Hexagon = 'hexagon'
-const circleSize = 20, triangleSize = 30, hexagonSize = 30;
-const maxSizeOfObject = 80;
-const startCount = 100;
+const PI2 = Math.PI * 2;
+const GREY = "#888888", YELLOW = "#FFFF00", RED = "#FF0000";
+const CIRCLE = 'CIRCLE', TRIANGLE = 'TRIANGLE', HEXAGON = 'HEXAGON'
 
-// предварительная проверка столкновений по описанным сферам
-// выводить FPS
-// сетка? квадродерево?
+const sim_settings =
+{
+    circleSize: 5, 
+    triangleSize: 5,
+    hexagonSize: 5,
+    gridSize : 50,
+    circlesCount : 300,
+    trianglesCount : 400,
+    hexagonsCount : 300,
+    triangleRotation: Math.PI/2,
+    hexRotation : Math.PI/2
+}
 
 function queueUpdates(numTicks) {
     for (let i = 0; i < numTicks; i++) {
@@ -27,28 +33,61 @@ function draw(tFrame) {
     drawTextInfo(context)
 }
 
+function isEdgesIntersect(ax, ay, bx, by, cx, cy, dx, dy)
+{
+    const r = ((ay-cy)*(dx-cx)-(ax-cx)*(dy-cy)) / ((bx-ax)*(dy-cy)-(by-ay)*(dx-cx))
+    const s = ((ay-cy)*(bx-ax)-(ax-cx)*(by-ay)) / ((bx-ax)*(dy-cy)-(by-ay)*(dx-cx))
+    return (r >= 0 && r <= 1 && s >= 0 && s <= 1)
+}
+
+function isCollision(fig1, fig2)
+{
+    x1 = fig1.x; y1 = fig1.y; p1 = fig1.points;
+    x2 = fig2.x; y2 = fig2.y; p2 = fig2.points;
+
+    for(let i = 0; i < p1.length-1; i++)
+    {
+        for(let j = 0; j < p2.length-1; j++)
+        {
+            if(isEdgesIntersect(p1[i].x+x1, p1[i].y+y1, p1[i+1].x+x1, p1[i+1].y+y1,
+                p2[j].x+x2, p2[j].y+y2, p2[j+1].x+x2, p2[j+1].y+y2))
+            return true;
+        }
+    }
+    return false;
+}
+
 function update(tick) {
-    if(gameState.count === 0)
+    if(gameState.figures.length === 0)
         stopGame(gameState.stopCycle)
 
-    gameState.figures.forEach(f => 
-        {
-            f.dx = f.x + f.vx;
-            f.dy = f.y + f.vy;
+    const figures = gameState.figures
 
-            // wall collision
-            if(f.x+f.right >= canvas.width || f.x+f.left <= 0)
+    for(let i = 0; i < figures.length; i++)
+        for(let j = i+1; j < figures.length; j++)
+        {
+            if( figures[i].size + figures[j].size >= 
+                Math.sqrt(Math.pow(figures[i].x-figures[j].x, 2) +  Math.pow(figures[i].y-figures[j].y, 2) )
+            && isCollision(figures[i], figures[j]))
+            {
+                [figures[i].vx, figures[j].vx] = [figures[j].vx, figures[i].vx];
+                [figures[i].vy, figures[j].vy] = [figures[j].vy, figures[i].vy];
+                figures[i].state++;
+                figures[j].state++;
+            }
+        }
+
+    gameState.figures.forEach(f => 
+        {   // wall collision
+            if(f.x+f.box.right >= canvas.width || f.x+f.box.left <= 0)
                 f.vx *= -1;
-            if(f.y+f.top >= canvas.height || f.y+f.bottom <= 0)
+            if(f.y+f.box.top >= canvas.height || f.y+f.box.bottom <= 0)
                 f.vy *= -1;
             f.x += f.vx;
             f.y += f.vy;
-
-            if(f.dx != f.x || f.dy != f.y)
-                f.state++;
         })
     changeColor();
-    clear();
+    gameState.figures = gameState.figures.filter(f => f.state < 3);
 }
 
 function changeColor()
@@ -57,13 +96,13 @@ function changeColor()
     {
         switch(f.state){
             case 1:
-                f.color = Yellow;
+                f.color = YELLOW;
                 break;
             case 2:
-                f.color = Red;
+                f.color = RED;
                 break;
         }
-    })
+    });
 }
 
 function clear()
@@ -109,19 +148,21 @@ function drawTextInfo(context)
 function setup() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
+    
+    gameState.isLose = false
+    gameState.startCount = sim_settings.circlesCount 
+        + sim_settings.trianglesCount + sim_settings.hexagonsCount;
+    generateFigures(gameState.startCount)
 
     gameState.lastTick = performance.now();
     gameState.lastRender = gameState.lastTick;
     gameState.tickLength = 15; //ms
     canvas.addEventListener('click', onRestart, false)
 
-    gameState.isLose = false
-    gameState.startCount = startCount
-    generateFigures(gameState.startCount)
 }
 
 class Figure{
-    constructor(type, x, y, size, vx, vy, draw)
+    constructor(type, x, y, size, vx, vy, draw, numEdges, angle = 0)
     {
         this.type = type;
         this.x = x;
@@ -129,14 +170,13 @@ class Figure{
         this.size = size;
         this.vx = vx;
         this.vy = vy;
-        this.color = Grey;
+        this.color = GREY;
         this.draw = draw;
         this.state = 0;
-        this.dx = x;
-        this.dy = y;
+        this.angle = angle;
+        generatePoints(this, numEdges, size, angle);
     }
-    draw(context) {
-    }
+    draw(context) {}
 }
 
 function generateFigures(count)
@@ -144,36 +184,36 @@ function generateFigures(count)
     const figures = [];
     let variant = 0;
     let newFigure = null;
-    let vx = 0, vy = 0, x = 0;
-    let y = maxSizeOfObject;
+    let vx = 0, vy = 0, x = 0, y = sim_settings.gridSize;
+
+    let figCounts = [sim_settings.circlesCount, sim_settings.trianglesCount, sim_settings.hexagonsCount];
+
     for(let i = 0; i < count; i++)
     {
-        x += maxSizeOfObject;
-        
-        if(x > canvas.width - maxSizeOfObject)
+        x += sim_settings.gridSize;
+        if(x > canvas.width - sim_settings.gridSize) // placing figures in the nodes of grid to avoid intersections
         {
-            x = maxSizeOfObject;
-            y += maxSizeOfObject;
+            x = sim_settings.gridSize;
+            y += sim_settings.gridSize;
         }
-        variant = Math.round(Math.random()*2 + 1);
+        do {
+            variant = Math.round(Math.random()*2 + 1);
+        }
+        while(figCounts[variant-1] <= 0)
+        figCounts[variant-1] -= 1;
+
         vx = (Math.random() < 0.5 ? -1 : 1) * Math.random() * 1;
         vy = (Math.random() < 0.5 ? -1 : 1) * Math.random() * 1;
         switch(variant)
         {
             case 1:
-                newFigure = new Figure(Circle, x, y, circleSize, vx, vy, drawCircle);
-                newFigure.left = -circleSize;
-                newFigure.right = circleSize;
-                newFigure.top = circleSize;
-                newFigure.bottom = -circleSize;
+                newFigure = new Figure(CIRCLE, x, y, sim_settings.circleSize, vx, vy, drawCircle, 12);
                 break;
             case 2:
-                newFigure = new Figure(Triangle, x, y, triangleSize, vx, vy, drawPolygon);
-                generatePoints(newFigure, 3, triangleSize, -Math.PI/2);
+                newFigure = new Figure(TRIANGLE, x, y, sim_settings.triangleSize, vx, vy, drawPolygon, 3, sim_settings.triangleRotation);
                 break;
             case 3:
-                newFigure = new Figure(Hexagon, x, y, hexagonSize, vx, vy, drawPolygon);
-                generatePoints(newFigure, 6, hexagonSize);
+                newFigure = new Figure(HEXAGON, x, y, sim_settings.hexagonSize, vx, vy, drawPolygon, 6, sim_settings.hexRotation);
                 break;
         }
         figures.push(newFigure)
@@ -193,10 +233,9 @@ function drawCircle(context)
 function drawPolygon(context) 
 {
     context.beginPath();
-    context.moveTo(this.x, this.y);
-    this.points.forEach(p => {
-        context.lineTo(this.x+p[0], this.y+p[1])
-    })
+    context.moveTo(this.x+this.points[0].x, this.y+this.points[0].y);
+    for(let i = 1; i < this.points.length-1; i++)
+        context.lineTo(this.x+this.points[i].x, this.y+this.points[i].y)
     context.fillStyle = this.color;
     context.fill();
     context.closePath();
@@ -205,31 +244,25 @@ function drawPolygon(context)
 function generatePoints(figure, number, size, startAngle=0) 
 {
     figure.points = [];
-    figure.left = 0;
-    figure.right = 0;
-    figure.top = 0;
-    figure.bottom = 0;
+    figure.box = {left : 0, right: 0, top: 0, bottom: 0}
     for(let angle = startAngle; angle <= PI2+startAngle; angle+= PI2/number)
     {   
         let px = Math.cos(angle)*size;
         let py = Math.sin(angle)*size;
-        if(figure.left > px)
-            figure.left = px;
-        else if (figure.right < px)
-            figure.right = px
+        if(figure.box.left > px)
+            figure.box.left = px;
+        else if (figure.box.right < px)
+            figure.box.right = px
 
-        if(figure.top < py)
-            figure.top = py;
-        else if (figure.bottom > py)
-            figure.bottom = py
-        figure.points.push([px, py])
+        if(figure.box.top < py)
+            figure.box.top = py;
+        else if (figure.box.bottom > py)
+            figure.box.bottom = py
+        figure.points.push({x:px, y:py})
     }
 }
 
-function onRestart(e)
-{
-    startGame()
-}
+function onRestart(e){startGame()}
 
 function startGame()
 {
